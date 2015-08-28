@@ -5,7 +5,10 @@ author: "Anlu Xing"
 date: "August 22, 2015"
 output: html_document
 ---
-
+```{r}
+library(doParallel)
+registerDoParallel(cores=4)
+```
 
 ## Introduction
 
@@ -14,22 +17,24 @@ The Weight Lifting Exercises dataset is to investigate "how (well)" an activity 
 
 ### Set up work directory and load libraries and data
 ```{r}
-setwd("C:/Users/anlu/datasciencecoursera/machine learning")
+setwd("C:/Users/anlu/machine-learning")
 library(AppliedPredictiveModeling)
 library(ggplot2)
 library(lattice)
 library(caret)
 library(rpart)
+library(rattle)
 library(randomForest)
+library(rpart.plot)
 set.seed(123)
 trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
 testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
 file_dest_training <- "pml-training.csv"
 file_dest_testing <- "pml-testing.csv"
-#myTraining<- read.csv(file_dest_training, na.strings=c("NA",""), header=TRUE)
+#training<- read.csv(file_dest_training, na.strings=c("NA",""), header=TRUE)
 #myTesting <-read.csv(file_dest_testing, na.strings=c("NA",""), header=TRUE)
-myTraining <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
-myTesting <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+training <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
 ```
 
 ## Clean the Data
@@ -39,48 +44,113 @@ myTesting <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
 * Remove near zero covariates
 
 ```{r}
-nsv <- nearZeroVar(myTraining, saveMetrics = T)
-myTraining <- myTraining[, !nsv$nzv]
+nsv <- nearZeroVar(training, saveMetrics = T)
+training <- training[, !nsv$nzv]
 ```
 
-* Remove first column of Dataset 
+* Remove irrelavent variables in the first 7 columns
 
 ```{r}
-myTraining <- myTraining[c(-1)]
+training <- training[,8:length(colnames(training))]
 ```
 
 * Clean Variables with too many NAs
 
 
 ```{r}
-nav <- sapply(colnames(myTraining), function(x) if(sum(is.na(myTraining[, x])) > 0.6*nrow(myTraining)){return(T)}else{return(F)})
-myTraining <- myTraining[, !nav]
+nav <- sapply(colnames(training), function(x) if(sum(is.na(training[, x])) > 0.6*nrow(training)){return(T)}else{return(F)})
+training <- training[, !nav]
 ```
 
 
 
-## Boosting model
 
-* Fit model with boosting algorithm and 10-fold cross validation to predict `classe` with all other predictors.    
+
+
+*Devide data into training set and testing set in order to do out of sample error with cross validation
 
 ```{r}
-#boostFit <- train(classe ~ ., method = "gbm", data = myTraining, verbose = F, trControl = trainControl(method = "cv", number = 10))
+inTrain <- createDataPartition(y=training$classe, p=0.6, list=FALSE)
+myTraining<-training[inTrain,]
+myTesting<-training[-inTrain,]
+clean2 <- colnames(myTesting[, -58]) 
+myTesting <- myTesting[clean2]
 ```
 
-* Plot accuracy of this model on the scale `[0.9, 1]`.        
 
+## Decision Tree
 
-```{r boost_plot}
-#boostFit
-#plot(boostFit, ylim = c(0.9, 1))
+* Fit model with decision tree algorithm and 3-fold cross validation to predict `classe` with all other predictors.
+
+```{r}
+modFitdt <- train(classe ~ ., method = "rpart", data = myTraining,trControl = trainControl(method = "cv", number = 3))
+preddt<-predict(modFitdt,myTesting)
+confusionMatrix(preddt,myTesting$classe)
+confusionMatrix
+```
+### Out of sample error with cross validation
+
+* From above code, we can see that the out of sample error with cross validation is `r  1-confusionMatrix(preddt,myTesting$classe)$overall[1]` and the accuracy is `r confusionMatrix(preddt,myTesting$classe)$overall[1]`
+
+### Save the results
+```{r}
+saveRDS(modFitdt, file="modFitdt.rds")
+saveRDS(preddt, file="preddt.rds")
+saveRDS(confusionMatrix, file="confusiondt.rds")
+#modFitrf = readRDS("modFitrf.rds")
 ```
 
-The accuracy is 0.997.
+### The view of decision tree
+```{r}
+fancyRpartPlot(modFitdt$finalModel)
+```
 
 ## Random Forests
 
+* Fit model with random forests algorithm and 3-fold cross validation to predict `classe` with all other predictors.The random forests is performed as follows 
 ```{r}
-rfFit <- train(classe ~ ., method = "rf", data =myTraining, importance = T, trControl = trainControl(method = "cv", number = 10))
-
+modFitrf <- train(classe ~ ., method = "rf", data =myTraining, importance = T, trControl = trainControl(method = "cv", number = 3))
+predrf<-predict(modFitrf,myTesting)
+confusionMatrix(predrf,myTesting$classe)
+confusionMatrix
 ```
 
+### Out of sample error with cross validation
+
+* From above code, we can see that the out of sample error with cross validation is `r  1-confusionMatrix(predrf,myTesting$classe)$overall[1]` and the accuracy is `r confusionMatrix(predrf,myTesting$classe)$overall[1]`
+
+### Most important predictors
+```{r}
+imp <- varImp(modFitrf)$importance
+imp$max <- apply(imp, 1, max)
+imp <- imp[order(imp$max, decreasing = T), ]
+```
+The final random forests model contains 500 trees with 40 variables tried at each split. The five most important predictors in this model are `r rownames(imp)[1:5]`.
+
+### Cache the results
+
+```{r}
+saveRDS(modFitrf, file="modFitrf.rds")
+saveRDS(predrf, file="predrf.rds")
+saveRDS(confusionMatrix, file="confusionrf.rds")
+saveRDS(imp, file="imp.rds")
+#modFitrf = readRDS("modFitrf.rds")
+```
+
+## Conclusion
+
+Compared with decision tree, random forests is a better algrithom with a higher accuracy and lower out of sample error. So I used the random forests predictor to do the final prediction.
+
+## write prediction files
+
+```{r}
+prediction<-predict(modFitrf,testing)
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_", i, ".txt")
+    write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, col.names = FALSE)
+  }
+}
+pml_write_files(prediction)
+```
