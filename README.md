@@ -1,2 +1,3 @@
-# machine-learning
+# Predict Weight Lifting Behavior
+The Weight Lifting Exercises dataset is to investigate "how (well)" an activity was performed by the wearer. Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. This project used data from accelerometers (devices such as Jawbone Up, Nike FuelBand, and Fitbit) on the belt, forearm, arm, and dumbell of 6 participants to quantify how well they do the weight lifting.
 
